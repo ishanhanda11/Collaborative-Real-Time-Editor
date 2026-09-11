@@ -1,6 +1,6 @@
 
 # ---------- FRONTEND BUILD ----------
-FROM node:20-alpine as frontend-builder
+FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app
 COPY ./frontend/package*.json ./
