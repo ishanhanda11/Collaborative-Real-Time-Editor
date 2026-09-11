@@ -1,5 +1,10 @@
 # Collaborative Real-Time Code Editor (Containerized Deployment)
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-Render-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://collaborative-real-time-editor.onrender.com)
+[![Docker](https://img.shields.io/badge/Docker-Multi--Stage-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
+
+> 🌐 **Live Website**: [https://collaborative-real-time-editor.onrender.com](https://collaborative-real-time-editor.onrender.com/)
+
 A production-ready, containerized real-time collaborative code editor powered by **Monaco Editor**, **Yjs (CRDTs)**, and **Socket.IO**, deployed using **Docker multi-stage builds** on **Render**.
 
 ---
