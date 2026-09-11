@@ -1,6 +1,6 @@
-# Collaborative Real-Time Code Editor & Cloud Infrastructure
+# Collaborative Real-Time Code Editor (Containerized Deployment)
 
-A production-ready, containerized real-time collaborative code editor powered by **Monaco Editor**, **Yjs (CRDTs)**, **Socket.IO**, and deployed behind an **AWS Application Load Balancer (ALB)** using **Docker multi-stage builds**.
+A production-ready, containerized real-time collaborative code editor powered by **Monaco Editor**, **Yjs (CRDTs)**, and **Socket.IO**, deployed using **Docker multi-stage builds** on **Render**.
 
 ---
 
@@ -13,8 +13,8 @@ flowchart LR
         U2["Client 2\n(Monaco + Yjs + Awareness)"]
     end
 
-    subgraph AWS["AWS Cloud Infrastructure"]
-        ALB["AWS Application Load Balancer (ALB)\n• WebSocket Upgrade\n• Health Check: /health\n• Port 80/443 Routing"]
+    subgraph Cloud["Render Cloud Infrastructure"]
+        PROXY["Reverse Proxy / SSL Termination\n• Native WebSocket Upgrade\n• Health Check: /health\n• Port Routing"]
     end
 
     subgraph Docker["Docker Container (Node 20 Alpine)"]
@@ -25,16 +25,21 @@ flowchart LR
         end
     end
 
-    U1 <-->|WebSocket / HTTP| ALB
-    U2 <-->|WebSocket / HTTP| ALB
-    ALB <-->|Reverse Proxy / Target Group| Backend
+    U1 <-->|WSS / HTTPS| PROXY
+    U2 <-->|WSS / HTTPS| PROXY
+    PROXY <-->|Dynamic PORT| Backend
 ```
 
 ### System Flow
 1. **CRDT Synchronization Layer**: The client runs `Yjs` and binds to the Monaco Editor via `y-monaco`. Every keystroke is treated as an operational CRDT update, guaranteeing deterministic conflict-free resolution without locking.
-2. **Transport & Awareness**: `y-socket.io` transmits document updates and ephemeral awareness states (username, typing presence, active client list) over WebSockets.
-3. **Containerized Server**: Express hosts both the static frontend (built in a multi-stage Docker process) and the Socket.IO + YSocketIO room server.
-4. **AWS Ingress**: Traffic routes through an AWS Application Load Balancer (ALB) configured to support WebSocket upgrades, target group health checking (`/health`), and low-latency client routing.
+2. **Transport & Awareness**: `y-socket.io` transmits document updates and ephemeral awareness states (username, typing presence, active client list) over persistent WebSockets.
+3. **Multi-Stage Containerization**: 
+   - **Stage 1 (`frontend-builder`)**: Compiles the React + Vite frontend into optimized static assets.
+   - **Stage 2 (`production runner`)**: Packages only backend dependencies and copies `/app/dist` into `backend/public`, creating a self-contained, lightweight Alpine container.
+4. **Unified Single-Origin Deployment**:
+   - Both the React frontend and Socket.IO backend are served from the exact same origin.
+   - Completely eliminates cross-site CORS configurations and third-party cookie restrictions.
+   - Container is cloud-agnostic (runs on Render, AWS ECS/Fargate, Railway, or local Docker).
 
 ---
 
@@ -44,8 +49,8 @@ flowchart LR
 - **VS Code Editing Experience**: Full code editing capabilities via Monaco Editor (`@monaco-editor/react`).
 - **Live User Presence & Typing Status**: Real-time connected user roster, dynamic typing indicator with auto-debounced timeout, and clean state disposal on tab close/unload.
 - **Unified Multi-Stage Docker Image**: Builds the Vite React frontend in stage 1, packages it into a lightweight Node.js 20 Alpine production container in stage 2.
-- **Cloud & Health Monitoring**: Dedicated `/health` endpoint for ALB / ECS target group health checks.
-- **Flexible Environment Configuration**: Automatically defaults to relative host (`window.location.origin`) or customizable `VITE_SERVER_URL` for local vs. cloud environments.
+- **Automated Health Monitoring**: Dedicated `/health` endpoint for container health checks and uptime monitoring.
+- **Single-Origin Architecture**: Bypasses CORS and third-party cookie restrictions by serving both API and static UI from one unified host.
 
 ---
 
@@ -56,16 +61,16 @@ flowchart LR
 | **Frontend** | React 19, Vite, `@monaco-editor/react`, Tailwind CSS |
 | **Real-Time & CRDT** | `yjs`, `y-monaco`, `y-socket.io`, `socket.io-client` |
 | **Backend** | Node.js, Express.js (v5), `socket.io`, `y-socket.io` |
-| **DevOps & Cloud** | Docker (Multi-stage build), Alpine Linux, AWS Application Load Balancer (ALB) |
+| **DevOps & Cloud** | Docker (Multi-stage build), Alpine Linux, Render Web Service |
 
 ---
 
 ## 📁 Repository Structure
 
 ```text
-Doc-Aws/
+Collaborative-Real-Time-Editor/
 ├── backend/
-│   ├── public/              # Production frontend static bundle
+│   ├── public/              # Production static bundle & assets
 │   ├── server.js            # Express server, /health API, and YSocketIO init
 │   ├── package.json
 │   └── package-lock.json
@@ -75,10 +80,14 @@ Doc-Aws/
 │   │   │   ├── App.jsx      # Editor, Yjs provider, presence, and UI
 │   │   │   └── App.css
 │   │   └── main.jsx
+│   ├── public/
+│   │   └── logo.svg         # Custom favicon vector logo
+│   ├── .env.example
 │   ├── index.html
 │   ├── vite.config.js
 │   └── package.json
 ├── .dockerignore
+├── .gitignore
 ├── dockerfile               # Multi-stage production container build
 └── README.md
 ```
@@ -104,32 +113,34 @@ npm install
 npm run dev
 # Frontend runs on http://localhost:5173
 ```
-*Note: In development, set `VITE_SERVER_URL=http://localhost:3000` in `frontend/.env`.*
+*Note: In local split development, copy `.env.example` to `.env` (`VITE_SERVER_URL=http://localhost:3000`).*
 
 ---
 
-### 2. Running with Docker
+### 2. Running Locally with Docker
 
 Build and run the unified container (frontend + backend bundled into a single Alpine image):
 
 ```bash
-# From the root directory:
-docker build -t real-time-editor .
+# Build the multi-stage image:
+docker build -t collaborative-editor .
 
-# Run container on port 3000
-docker run -d -p 3000:3000 --name doc-editor real-time-editor
+# Run container on port 3000:
+docker run -d -p 3000:3000 --name doc-editor collaborative-editor
 ```
 
 Open your browser at `http://localhost:3000`.
 
 ---
 
-## ⚙️ Environment Variables
+## ☁️ Cloud Deployment (Render)
 
-### Frontend (`frontend/.env`)
-| Variable | Required | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `VITE_SERVER_URL` | No | `window.location.origin` | Base URL for Socket.IO connection (useful in split local dev) |
+This repository is configured to deploy directly to **Render** via its `dockerfile`:
+
+1. **Service Type**: Web Service (Docker Runtime).
+2. **Dockerfile Path**: `dockerfile`
+3. **Health Check Path**: `/health`
+4. **Port Handling**: Backend reads `process.env.PORT || 3000`, matching Render's dynamic port assignment.
 
 ---
 
@@ -144,12 +155,4 @@ Open your browser at `http://localhost:3000`.
       "success": true
     }
     ```
-  - **Purpose**: Used by AWS Target Groups / Container Orchestrators to verify service availability.
-
----
-
-## ☁️ AWS Deployment Notes
-
-1. **Target Group Health Checks**: Configure path `/health` on port `3000` with HTTP protocol.
-2. **WebSocket Support**: Ensure the Application Load Balancer has idle timeout adjusted (default 60s, recommend 120s+ for long-lived WebSocket sessions) and sticky sessions enabled if running across multiple replica targets.
-3. **CORS Configuration**: Restrict allowed origins in `backend/server.js` for production security.
+  - **Purpose**: Used by cloud load balancers and orchestrators to verify container health.
